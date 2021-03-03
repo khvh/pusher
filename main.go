@@ -19,10 +19,27 @@ func main() {
 				Name: "repo",
 				Aliases: []string{"r", "repos"},
 			},
+			&cli.BoolFlag{
+				Name: "git",
+			},
+			&cli.StringFlag{
+				Name: "version",
+				Aliases: []string{"v"},
+				DefaultText: "",
+			},
+			&cli.StringFlag{
+				Name: "version-file",
+				Aliases: []string{"vf"},
+				DefaultText: "",
+			},
+			&cli.StringFlag{
+				Name: "name",
+				Aliases: []string{"n"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			if len(c.StringSlice("repos")) > 0 {
-				handleRepos(c.StringSlice("repo"))
+				handleRepos(c.String("name"), c.StringSlice("repo"), c.String("version"), c.String("version-file"), c.Bool("git"))
 			}
 
 			return nil
@@ -37,30 +54,51 @@ func main() {
 
 }
 
-func handleRepos(repos []string) {
-	version := "latest"
-
+func handleRepos(name string, repos []string, version string, versionFileName string, git bool) {
 	current, _ := os.Getwd()
 
-	versionFile, err := ioutil.ReadFile(path.Join(current, "VERSION"))
+	if versionFileName != "" {
+		versionFile, err := ioutil.ReadFile(path.Join(current, versionFileName))
 
-	if err == nil {
-		version = string(versionFile)
+		if err == nil {
+			version = string(versionFile)
 
-		version = strings.TrimRight(strings.TrimRight(version, "\n"), "\r")
+			version = strings.TrimRight(strings.TrimRight(version, "\n"), "\r")
+		}
 	}
 
-	if _, err := os.Stat(path.Join(current, ".git")); !os.IsNotExist(err) {
-		// git rev-list -1 HEAD
-		cmd := exec.Command("git", "rev-list", "-1", "HEAD")
-		stdout, err := cmd.Output()
+	if git {
+		if _, err := os.Stat(path.Join(current, ".git")); !os.IsNotExist(err) {
+			cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+			stdout, err := cmd.Output()
 
-		if err != nil {}
+			if err != nil {}
 
-		version = fmt.Sprintf("%s-%s", version, string(stdout))
+			version = fmt.Sprintf("%s-%s", version, string(stdout))
+		}
 	}
 
 	for _, repo := range repos {
-		fmt.Println(repo, version)
+		image := fmt.Sprintf("%s/%s:%s", repo, name, version)
+
+		tag := exec.Command(fmt.Sprintf("docker tag . %s", image))
+
+		out, err := tag.Output()
+
+		if err != nil {
+			fmt.Printf("Error while tagging: %s", image)
+		}
+
+		fmt.Println(out)
+
+		push := exec.Command(fmt.Sprintf("docker push %s", image))
+
+		out, err = push.Output()
+
+		if err != nil {
+			fmt.Printf("Error while pushing: %s", image)
+		}
+
+		fmt.Println(out)
 	}
 }
