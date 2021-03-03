@@ -74,31 +74,41 @@ func handleRepos(name string, repos []string, version string, versionFileName st
 
 			if err != nil {}
 
-			version = fmt.Sprintf("%s-%s", version, string(stdout))
+			if len(version) > 0 {
+				version = fmt.Sprintf("%s-%s", version, string(stdout))
+			} else {
+				version = string(stdout)
+			}
 		}
 	}
+
+	images := ""
 
 	for _, repo := range repos {
-		image := fmt.Sprintf("%s/%s:%s", repo, name, version)
-
-		tag := exec.Command(fmt.Sprintf("docker tag . %s", image))
-
-		out, err := tag.Output()
-
-		if err != nil {
-			fmt.Printf("Error while tagging: %s", image)
-		}
-
-		fmt.Println(out)
-
-		push := exec.Command(fmt.Sprintf("docker push %s", image))
-
-		out, err = push.Output()
-
-		if err != nil {
-			fmt.Printf("Error while pushing: %s", image)
-		}
-
-		fmt.Println(out)
+		images = strings.TrimSuffix(images + " " + fmt.Sprintf("-t %s/%s:%s", repo, name, version), "\n")
 	}
+
+	run(fmt.Sprintf("docker build %s .", images))
+
+	for _, image := range strings.Split(strings.ReplaceAll(strings.TrimPrefix(images, " "), "-t ", ""), " ") {
+		run(fmt.Sprintf("docker push %s", image))
+	}
+}
+
+func run(cmd string) {
+	fmt.Println(cmd)
+
+	parts := strings.Fields(cmd)
+
+	head := parts[0]
+  parts = parts[1:]
+
+  out, err := exec.Command(head,parts...).Output()
+
+	if err != nil {
+			fmt.Println("error occured")
+			fmt.Printf("%s", err)
+	}
+
+	fmt.Printf("%s", out)
 }
